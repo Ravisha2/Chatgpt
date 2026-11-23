@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Speed Test</title>
+<meta name="description" content="Measure your download speed, upload speed and ping, and compare results room by room.">
+<style>
+  :root {
+    --bg: #f6f6f3;
+    --card: #ffffff;
+    --ink: #17181a;
+    --muted: #6b6e74;
+    --line: #e2e2dd;
+    --track: #e9e9e4;
+    --accent: #2563eb;
+    --down: #2563eb;
+    --up: #9333ea;
+    --good: #15803d;
+    --ok: #b45309;
+    --bad: #b91c1c;
+    --focus: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111214;
+      --card: #1b1c1f;
+      --ink: #f1f1ee;
+      --muted: #a0a3a9;
+      --line: #2c2e32;
+      --track: #2a2c30;
+      --accent: #60a5fa;
+      --down: #60a5fa;
+      --up: #c084fc;
+      --good: #4ade80;
+      --ok: #fbbf24;
+      --bad: #f87171;
+      --focus: #93c5fd;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 56px; }
+  header h1 { margin: 0; font-size: clamp(26px, 5vw, 36px); letter-spacing: -0.02em; }
+  header p { margin: 6px 0 0; color: var(--muted); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 20px;
+  }
+
+  /* Settings row */
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  select, input[type="text"] {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+  /* Gauge */
+  .meter { display: flex; flex-direction: column; align-items: center; margin-top: 8px; }
+  .gauge { width: min(100%, 340px); height: auto; display: block; }
+  .gauge .track { stroke: var(--track); }
+  .gauge .value { stroke: var(--down); transition: stroke-dashoffset 0.25s ease-out, stroke 0.3s; }
+  .gauge .ticks text { fill: var(--muted); font-size: 11px; }
+  .readout { margin-top: -78px; text-align: center; min-height: 78px; }
+  .readout .num { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .readout .unit { font-size: 14px; color: var(--muted); }
+  .phase { margin: 18px 0 0; min-height: 24px; color: var(--muted); text-align: center; }
+
+  .start {
+    margin-top: 16px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 17px;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 999px;
+    padding: 14px 40px;
+    cursor: pointer;
+    min-width: 180px;
+  }
+  @media (prefers-color-scheme: dark) { .start { color: #0b1220; } }
+  .start:hover { filter: brightness(1.08); }
+  .start.stop { background: var(--muted); }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+  /* Results */
+  .results { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+  .stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .stat .k { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .stat .k i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .stat .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+
+  .verdict { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+  .verdict:empty { display: none; }
+  .verdict h3 { margin: 0 0 4px; font-size: 16px; }
+  .verdict p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .good { color: var(--good); } .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .error { color: var(--bad); }
+
+  /* History */
+  .history-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .history-head h2 { margin: 0; font-size: 18px; }
+  .linkbtn { font: inherit; font-size: 14px; color: var(--accent); background: none; border: 0; padding: 4px; cursor: pointer; }
+  .table-scroll { overflow-x: auto; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.where { white-space: normal; min-width: 90px; }
+  .empty { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+
+  details { margin-top: 20px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details ul { color: var(--muted); padding-left: 20px; }
+  details li { margin: 6px 0; }
+
+  footer { margin-top: 28px; font-size: 13px; color: var(--muted); text-align: center; }
+
+  @media (max-width: 640px) {
+    .card { padding: 18px; }
+    .settings { grid-template-columns: 1fr; }
+    .results { grid-template-columns: repeat(2, 1fr); }
+    .readout .num { font-size: 38px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gauge .value { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Simple Speed Test</h1>
+    <p>Check your download speed, upload speed and ping. Test in different rooms to find Wi‑Fi weak spots.</p>
+  </header>
+
+  <main>
+    <section class="card" aria-labelledby="test-heading">
+      <h2 id="test-heading" class="visually-hidden" style="position:absolute;left:-9999px">Run a test</h2>
+
+      <div class="settings">
+        <div>
+          <label for="server">Test against</label>
+          <select id="server">
+            <option value="internet">Internet (Cloudflare)</option>
+            <option value="local" disabled>Local network only (needs server.py)</option>
+          </select>
+          <p class="hint" id="server-hint">Measures your real internet speed.</p>
+        </div>
+        <div>
+          <label for="place">Where are you? <span style="font-weight:400">(optional)</span></label>
+          <input id="place" type="text" maxlength="40" placeholder="e.g. Bedroom, next to router" autocomplete="off">
+          <p class="hint">Saved with the result so you can compare rooms.</p>
+        </div>
+      </div>
+
+      <div class="meter">
+        <svg class="gauge" viewBox="0 0 240 150" role="img" aria-labelledby="gauge-label">
+          <title id="gauge-label">Speed gauge</title>
+          <path class="track" d="M 30 125 A 90 90 0 1 1 210 125" fill="none" stroke-width="16" stroke-linecap="round"/>
+          <path class="value" id="arc" d="M 30 125 A 90 90 0 1 1 210 125" fill="none" stroke-width="16" stroke-linecap="round"/>
+          <g class="ticks" id="ticks"></g>
+        </svg>
+        <div class="readout">
+          <div class="num" id="live">–</div>
+          <div class="unit" id="live-unit">Mbps</div>
+        </div>
+        <p class="phase" id="phase" aria-live="polite">Press Start to test your connection.</p>
+        <button class="start" id="start" type="button">Start test</button>
+      </div>
+
+      <div class="results" aria-label="Results">
+        <div class="stat"><div class="k"><i style="background:var(--down)"></i>Download</div><div class="v" id="r-down">–</div></div>
+        <div class="stat"><div class="k"><i style="background:var(--up)"></i>Upload</div><div class="v" id="r-up">–</div></div>
+        <div class="stat"><div class="k">Ping</div><div class="v" id="r-ping">–</div></div>
+        <div class="stat"><div class="k">Jitter</div><div class="v" id="r-jitter">–</div></div>
+      </div>
+
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="history-heading">
+      <div class="history-head">
+        <h2 id="history-heading">Your recent tests</h2>
+        <button class="linkbtn" id="clear" type="button" hidden>Clear history</button>
+      </div>
+      <p class="empty" id="history-empty">No tests yet. Results are saved only in this browser.</p>
+      <div class="table-scroll" id="history-wrap" hidden>
+        <table>
+          <thead><tr><th>When</th><th>Where</th><th>Test</th><th>Down</th><th>Up</th><th>Ping</th></tr></thead>
+          <tbody id="history"></tbody>
+        </table>
+      </div>
+
+      <details>
+        <summary>How to read your results</summary>
+        <ul>
+          <li><strong>Download</strong>: how fast you receive data (streaming, browsing). 25 Mbps or more handles 4K video.</li>
+          <li><strong>Upload</strong>: how fast you send data (video calls, sending files). 5 Mbps or more is fine for video calls.</li>
+          <li><strong>Ping</strong>: delay in milliseconds. Lower is better. Under 50 ms feels instant, and over 150 ms makes calls and games lag.</li>
+          <li><strong>Jitter</strong>: how much the ping jumps around. Under 30 ms keeps calls smooth.</li>
+          <li><strong>Wi‑Fi or internet?</strong> Test next to the router and in the slow room. If both are slow, the problem is your internet plan or provider. If only the far room is slow, the problem is Wi‑Fi coverage.</li>
+          <li><strong>Local network mode</strong> (with <code>server.py</code>) skips the internet entirely and measures your Wi‑Fi alone.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
+  <footer>Internet tests use Cloudflare's public speed test service. Each test uses roughly 50–500 MB of data, depending on your speed.</footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Settings ----------
+  const CLOUDFLARE = 'https://speed.cloudflare.com';
+  const PING_SAMPLES = 15;       // number of ping measurements
+  const PHASE_MS = 8000;         // how long download and upload each run
+  const WARMUP_MS = 1500;        // ignore the slow start of each phase
+  const STREAMS = 4;             // parallel connections (like other speed tests)
+  const MAX_DOWN_CHUNK = 25e6;   // bytes per download request, at most
+  const MAX_UP_CHUNK = 8e6;      // bytes per upload request, at most
+  const GAUGE_MAX = 1000;        // Mbps at the end of the gauge (log scale)
+  const HISTORY_KEY = 'simple-speedtest-history';
+
+  // ---------- Elements ----------
+  const $ = (id) => document.getElementById(id);
+  const startBtn = $('start'), phaseEl = $('phase'), liveEl = $('live'), liveUnit = $('live-unit');
+  const arc = $('arc'), serverSel = $('server'), serverHint = $('server-hint'), placeInput = $('place');
+  const out = { down: $('r-down'), up: $('r-up'), ping: $('r-ping'), jitter: $('r-jitter') };
+
+  let running = null; // AbortController of the test in progress
+
+  // ---------- Gauge ----------
+  const ARC_LEN = arc.getTotalLength();
+  arc.style.strokeDasharray = ARC_LEN;
+  arc.style.strokeDashoffset = ARC_LEN;
+
+  // Logarithmic scale so both 2 Mbps and 500 Mbps are readable.
+  const toFraction = (mbps) => mbps <= 0 ? 0 : Math.min(1, Math.log10(1 + mbps) / Math.log10(1 + GAUGE_MAX));
+
+  (function drawTicks() {
+    const g = $('ticks');
+    const cx = 120, cy = 125, r = 90; // the arc is a half circle centred here
+    [0, 5, 25, 100, 1000].forEach((v) => {
+      const f = toFraction(v);
+      const angle = Math.PI + f * Math.PI; // from the left end, over the top, to the right end
+      const x = cx + Math.cos(angle) * (r - 24), y = cy + Math.sin(angle) * (r - 24);
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', x.toFixed(1)); t.setAttribute('y', (y + 4).toFixed(1));
+      t.setAttribute('text-anchor', 'middle');
+      t.textContent = v;
+      g.appendChild(t);
+    });
+  })();
+
+  function showLive(value, unit, color) {
+    liveEl.textContent = value == null ? '–' : formatNum(value);
+    liveUnit.textContent = unit;
+    arc.style.stroke = color || '';
+    arc.style.strokeDashoffset = unit === 'Mbps' && value != null ? ARC_LEN * (1 - toFraction(value)) : ARC_LEN;
+  }
+
+  const formatNum = (n) => n >= 100 ? Math.round(n).toString() : n >= 10 ? n.toFixed(1) : n.toFixed(2);
+
+  // ---------- URLs ----------
+  const base = () => serverSel.value === 'local' ? '' : CLOUDFLARE;
+  const nonce = () => Math.random().toString(36).slice(2);
+  const downUrl = (bytes) => `${base()}/__down?bytes=${bytes}&r=${nonce()}`;
+  const upUrl = () => `${base()}/__up?r=${nonce()}`;
+
+  // ---------- Ping ----------
+  async function measurePing(signal) {
+    const samples = [];
+    for (let i = 0; i <= PING_SAMPLES; i++) {
+      const t0 = performance.now();
+      const res = await fetch(downUrl(0), { cache: 'no-store', signal });
+      await res.arrayBuffer();
+      const ms = performance.now() - t0;
+      if (i === 0) continue; // the first request also sets up the connection, so skip it
+      samples.push(ms);
+      showLive(ms, 'ms ping', 'var(--muted)');
+    }
+    const sorted = [...samples].sort((a, b) => a - b);
+    const ping = sorted[Math.floor(sorted.length / 2)]; // median ignores odd spikes
+    let jitter = 0;
+    for (let i = 1; i < samples.length; i++) jitter += Math.abs(samples[i] - samples[i - 1]);
+    jitter /= samples.length - 1;
+    return { ping, jitter };
+  }
+
+  // ---------- Timed transfer (shared by download and upload) ----------
+  // Runs `worker` on several connections for PHASE_MS, sampling total bytes moved.
+  // The final speed ignores the first WARMUP_MS while connections speed up.
+  async function timedTransfer(worker, color, signal) {
+    const phaseCtrl = new AbortController();
+    const stopAll = () => phaseCtrl.abort();
+    signal.addEventListener('abort', stopAll);
+
+    const state = { bytes: 0, lastAt: 0, chunks: [] };
+    const start = performance.now();
+    const samples = [{ t: 0, bytes: 0 }];
+
+    const sampler = setInterval(() => {
+      const t = performance.now() - start;
+      samples.push({ t, bytes: state.bytes });
+      // Live speed over the last ~2 seconds.
+      const old = samples.find((s) => s.t >= t - 2000) || samples[0];
+      if (t - old.t > 200) showLive(((state.bytes - old.bytes) * 8) / ((t - old.t) / 1000) / 1e6, 'Mbps', color);
+    }, 200);
+    const timer = setTimeout(stopAll, PHASE_MS);
+
+    let failure = null;
+    await Promise.all(Array.from({ length: STREAMS }, (_, stream) =>
+      worker(state, phaseCtrl.signal, stream).catch((err) => {
+        if (!phaseCtrl.signal.aborted) { failure = err; stopAll(); }
+      })
+    ));
+
+    clearInterval(sampler);
+    clearTimeout(timer);
+    signal.removeEventListener('abort', stopAll);
+    if (signal.aborted) throw new DOMException('Stopped', 'AbortError');
+    if (failure) throw failure;
+
+    // Measure up to the moment data last arrived, not to when the timer fired.
+    const end = { t: (state.lastAt || performance.now()) - start, bytes: state.bytes };
+    if (end.bytes === 0) throw new Error('No data was transferred.');
+
+    if (state.chunks.length) {
+      // Uploads are only counted when a whole chunk finishes, so spread each chunk's
+      // bytes evenly over the time it took and count just the part after warm-up.
+      // End the window when every connection has reported, so no stream is half-counted.
+      const lastPerStream = new Map();
+      for (const c of state.chunks) lastPerStream.set(c.stream, Math.max(lastPerStream.get(c.stream) || 0, c.t1));
+      const winEnd = Math.min(...lastPerStream.values());
+      const winStart = start + Math.min(WARMUP_MS, (winEnd - start) / 2);
+      let bytes = 0;
+      for (const c of state.chunks) {
+        const overlap = Math.min(c.t1, winEnd) - Math.max(c.t0, winStart);
+        if (overlap > 0) bytes += c.bytes * (overlap / (c.t1 - c.t0));
+      }
+      return (bytes * 8) / ((winEnd - winStart) / 1000) / 1e6;
+    }
+
+    const from = samples.find((s) => s.t >= WARMUP_MS && s.t < end.t) || samples[0];
+    const seconds = (end.t - from.t) / 1000;
+    if (seconds <= 0) throw new Error('No data was transferred.');
+    return ((end.bytes - from.bytes) * 8) / seconds / 1e6;
+  }
+
+  // Download: fetch growing chunks and count bytes as they arrive.
+  async function downloadWorker(state, signal) {
+    let size = 1e6;
+    while (!signal.aborted) {
+      const res = await fetch(downUrl(size), { cache: 'no-store', signal });
+      if (!res.ok) throw new Error(`Server replied ${res.status}`);
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        state.bytes += value.length;
+        state.lastAt = performance.now();
+      }
+      size = Math.min(size * 2, MAX_DOWN_CHUNK);
+    }
+  }
+
+  // Upload: send random data in growing chunks; count each chunk once it is accepted.
+  let uploadData = null;
+  function getUploadData() {
+    if (!uploadData) {
+      const buf = new Uint8Array(MAX_UP_CHUNK);
+      for (let i = 0; i < buf.length; i += 65536) crypto.getRandomValues(buf.subarray(i, i + 65536));
+      uploadData = new Blob([buf]);
+    }
+    return uploadData;
+  }
+  async function uploadWorker(state, signal, stream) {
+    let size = 32e3; // start small so very slow connections still finish a chunk
+    const data = getUploadData();
+    while (!signal.aborted) {
+      const t0 = performance.now();
+      // 'no-cors' keeps this a simple request that any server accepts; we only need to know it finished.
+      await fetch(upUrl(), { method: 'POST', body: data.slice(0, size), mode: 'no-cors', cache: 'no-store', signal });
+      state.bytes += size;
+      state.lastAt = performance.now();
+      state.chunks.push({ stream, t0, t1: state.lastAt, bytes: size });
+      // Bytes only count once a chunk finishes, so keep each chunk to roughly a second:
+      // big enough to be efficient, small enough that little is lost when the timer stops.
+      const took = state.lastAt - t0;
+      if (took < 500) size = Math.min(size * 2, MAX_UP_CHUNK);
+      else if (took > 1500) size = Math.max(size / 2, 16e3);
+    }
+  }
+
+  // ---------- Results text ----------
+  function verdictHtml(r) {
+    const d = r.down;
+    let cls, title, detail;
+    if (d >= 100) { cls = 'good'; title = 'Excellent'; detail = 'Plenty for several 4K streams, gaming and large downloads at once.'; }
+    else if (d >= 25) { cls = 'good'; title = 'Good'; detail = 'Fine for 4K streaming, video calls and working from home.'; }
+    else if (d >= 10) { cls = 'ok'; title = 'Okay'; detail = 'HD streaming and video calls work, but several people at once may struggle.'; }
+    else if (d >= 3) { cls = 'ok'; title = 'Slow'; detail = 'Browsing and standard-quality video only. Try closer to the router.'; }
+    else { cls = 'bad'; title = 'Very slow'; detail = 'Even browsing will feel sluggish. Try next to the router to see if Wi‑Fi is the cause.'; }
+
+    let lag;
+    if (r.ping < 50 && r.jitter < 30) lag = '<span class="good">Low delay</span>: calls and online games should feel responsive.';
+    else if (r.ping < 150) lag = '<span class="ok">Moderate delay</span>: fine for calls, competitive gaming may feel slightly laggy.';
+    else lag = '<span class="bad">High delay</span>: calls may stutter and games will lag.';
+
+    const up = r.up < 3 ? ' <span class="bad">Upload is low</span>, so video calls and sending files may struggle.' : '';
+    return `<h3 class="${cls}">${title}</h3><p>${detail}${up}</p><p>${lag}</p>`;
+  }
+
+  // ---------- History (saved only in this browser) ----------
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
+  }
+  function saveHistory(list) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 20))); } catch { /* storage unavailable */ }
+  }
+  function renderHistory() {
+    const list = loadHistory();
+    const body = $('history');
+    body.textContent = '';
+    for (const h of list) {
+      const tr = document.createElement('tr');
+      const when = new Date(h.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      [when, h.place || '–', h.mode === 'local' ? 'Wi‑Fi' : 'Internet',
+       `${formatNum(h.down)} Mbps`, `${formatNum(h.up)} Mbps`, `${Math.round(h.ping)} ms`]
+        .forEach((text, i) => {
+          const td = document.createElement('td');
+          td.textContent = text; // textContent keeps user-typed labels safe
+          if (i === 1) td.className = 'where';
+          tr.appendChild(td);
+        });
+      body.appendChild(tr);
+    }
+    $('history-wrap').hidden = list.length === 0;
+    $('history-empty').hidden = list.length > 0;
+    $('clear').hidden = list.length === 0;
+  }
+  $('clear').addEventListener('click', () => { saveHistory([]); renderHistory(); });
+
+  // ---------- Running the test ----------
+  function resetResults() {
+    Object.values(out).forEach((el) => { el.textContent = '–'; });
+    $('verdict').innerHTML = '';
+  }
+  const mbpsHtml = (v) => `${formatNum(v)} <small>Mbps</small>`;
+  const msHtml = (v) => `${Math.round(v)} <small>ms</small>`;
+
+  async function runTest() {
+    running = new AbortController();
+    const { signal } = running;
+    startBtn.textContent = 'Stop';
+    startBtn.classList.add('stop');
+    serverSel.disabled = true;
+    resetResults();
+
+    try {
+      phaseEl.textContent = 'Measuring ping…';
+      const { ping, jitter } = await measurePing(signal);
+      out.ping.innerHTML = msHtml(ping);
+      out.jitter.innerHTML = msHtml(jitter);
+
+      phaseEl.textContent = 'Testing download speed…';
+      const down = await timedTransfer(downloadWorker, 'var(--down)', signal);
+      out.down.innerHTML = mbpsHtml(down);
+
+      phaseEl.textContent = 'Testing upload speed…';
+      const up = await timedTransfer(uploadWorker, 'var(--up)', signal);
+      out.up.innerHTML = mbpsHtml(up);
+
+      const result = { at: Date.now(), place: placeInput.value.trim(), mode: serverSel.value, down, up, ping, jitter };
+      showLive(down, 'Mbps', 'var(--down)');
+      phaseEl.textContent = 'Done. Showing download speed.';
+      $('verdict').innerHTML = verdictHtml(result);
+      saveHistory([result, ...loadHistory()]);
+      renderHistory();
+    } catch (err) {
+      showLive(null, 'Mbps');
+      if (err.name === 'AbortError') {
+        phaseEl.textContent = 'Test stopped.';
+      } else {
+        console.warn('Speed test failed:', err);
+        phaseEl.innerHTML = '';
+        const span = document.createElement('span');
+        span.className = 'error';
+        span.textContent = serverSel.value === 'local'
+          ? 'Could not reach the local server. Is server.py still running?'
+          : 'Could not reach the test server. Check that you are online and that no ad blocker or firewall is blocking speed.cloudflare.com.';
+        phaseEl.appendChild(span);
+      }
+    } finally {
+      running = null;
+      startBtn.textContent = 'Start test';
+      startBtn.classList.remove('stop');
+      serverSel.disabled = false;
+      startBtn.focus();
+    }
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) running.abort();
+    else runTest();
+  });
+
+  // ---------- Detect the optional local server ----------
+  const hints = {
+    internet: 'Measures your real internet speed.',
+    local: 'Measures Wi‑Fi between this device and the computer running server.py. Your internet is not used.',
+  };
+  serverSel.addEventListener('change', () => { serverHint.textContent = hints[serverSel.value]; });
+
+  (async () => {
+    if (!location.protocol.startsWith('http')) return;
+    try {
+      const res = await fetch('__meta', { cache: 'no-store' });
+      const meta = await res.json();
+      if (meta.app === 'speedtest-local') {
+        const opt = serverSel.querySelector('option[value="local"]');
+        opt.disabled = false;
+        opt.textContent = `Local network only (${meta.host})`;
+      }
+    } catch { /* not served by server.py: internet mode only */ }
+  })();
+
+  renderHistory();
+})();
+</script>
+</body>
+</html>
