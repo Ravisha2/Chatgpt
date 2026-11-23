@@ -16,6 +16,7 @@ The result is the speed of your Wi-Fi alone, not your internet plan.
 Usage:
     python3 server.py          (port 8080)
     python3 server.py 9000     (choose another port)
+    python3 server.py --no-browser   (don't open the browser automatically)
 
 Needs only Python 3.8+ - no extra packages.
 """
@@ -24,6 +25,8 @@ import json
 import os
 import socket
 import sys
+import threading
+import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -121,7 +124,8 @@ def lan_ip():
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    port = int(args[0]) if args else 8080
     server = ThreadingHTTPServer(("0.0.0.0", port), SpeedTestHandler)
     server.daemon_threads = True
     ip = lan_ip()
@@ -130,6 +134,9 @@ def main():
     if ip:
         print(f"  On a phone / other device: http://{ip}:{port}   (same Wi-Fi)")
     print("\nPress Ctrl+C to stop.\n")
+    # Open the test page in this computer's browser once the server is up.
+    if "--no-browser" not in sys.argv:
+        threading.Timer(1.0, webbrowser.open, [f"http://localhost:{port}"]).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

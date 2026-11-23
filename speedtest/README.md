@@ -12,6 +12,8 @@ It uses Cloudflare's free public speed-test servers, the same ones behind speed.
 ### 2. Test your Wi‑Fi on its own (needs Python 3)
 This shows whether slowness comes from your **Wi‑Fi** or from your **internet plan**.
 
+**Windows shortcut:** double-click **`Start Speed Test (Windows).bat`**. It starts the server and opens the test page for you, so you can skip step 1.
+
 1. On a computer connected to the router (with a cable if possible), open a terminal in this folder and run:
    ```
    python3 server.py
