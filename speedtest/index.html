@@ -533,17 +533,28 @@
   };
   serverSel.addEventListener('change', () => { serverHint.textContent = hints[serverSel.value]; });
 
+  const onSameComputer = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(location.hostname);
   (async () => {
-    if (!location.protocol.startsWith('http')) return;
-    try {
-      const res = await fetch('__meta', { cache: 'no-store' });
-      const meta = await res.json();
-      if (meta.app === 'speedtest-local') {
-        const opt = serverSel.querySelector('option[value="local"]');
-        opt.disabled = false;
-        opt.textContent = `Local network only (${meta.host})`;
-      }
-    } catch { /* not served by server.py: internet mode only */ }
+    let found = false;
+    if (location.protocol.startsWith('http')) {
+      try {
+        const res = await fetch('__meta', { cache: 'no-store' });
+        const meta = await res.json();
+        if (meta.app === 'speedtest-local') {
+          found = true;
+          const opt = serverSel.querySelector('option[value="local"]');
+          opt.disabled = false;
+          opt.textContent = `Local network only (${meta.host})`;
+        }
+      } catch { /* not served by server.py: internet mode only */ }
+    }
+    if (!found) {
+      hints.internet += ' To test Wi‑Fi only, run server.py and open the address it shows.';
+    } else if (onSameComputer) {
+      hints.local = 'This is the computer running server.py, so data never crosses Wi‑Fi and the result will be unrealistically high. ' +
+        'Open the "phone / other device" address from the server window on your phone instead.';
+    }
+    serverHint.textContent = hints[serverSel.value];
   })();
 
   renderHistory();
